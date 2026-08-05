@@ -1,0 +1,46 @@
+{
+  "_comment": "Batch user seed template. Import into the ALSC realm via Admin Console > Realm Settings > Action menu > Partial import (set 'If a resource exists' to Skip so re-running this file is safe). Duplicate one of the objects below per new hire, fill in real values, delete this _comment key and any unused example entries before importing. Groups/roles referenced here must already exist (created by alsc-realm-seed.json).",
+
+  "users": [
+    {
+      "username": "juan.delacruz",
+      "enabled": true,
+      "emailVerified": false,
+      "firstName": "Juan",
+      "lastName": "Dela Cruz",
+      "email": "juan.delacruz@asianland.ph",
+      "attributes": {
+        "employee_code": ["EMP-0001"]
+      },
+      "groups": ["/Accounting"],
+      "requiredActions": ["UPDATE_PASSWORD"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ChangeMe123!",
+          "temporary": true
+        }
+      ]
+    },
+    {
+      "username": "maria.santos",
+      "enabled": true,
+      "emailVerified": false,
+      "firstName": "Maria",
+      "lastName": "Santos",
+      "email": "maria.santos@asianland.ph",
+      "attributes": {
+        "employee_code": ["EMP-0002"]
+      },
+      "groups": ["/IT-Admin"],
+      "requiredActions": ["UPDATE_PASSWORD"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ChangeMe123!",
+          "temporary": true
+        }
+      ]
+    }
+  ]
+}

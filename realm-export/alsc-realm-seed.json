@@ -1,0 +1,256 @@
+{
+  "realm": "ALSC",
+  "enabled": true,
+  "displayName": "ALSC SSO",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "loginTheme": "alsc-theme",
+  "defaultGroups": ["/Employee"],
+
+  "roles": {
+    "realm": [
+      { "name": "employee", "description": "Baseline role auto-assigned to every user via the /Employee default group" },
+      { "name": "it-admin", "description": "Marker role for IT department staff (paired with per-client admin roles below)" }
+    ],
+    "client": {
+      "erp": [
+        { "name": "erp-admin", "description": "Full administrative access to ERP" },
+        { "name": "erp-accounting", "description": "Accounting department access to ERP" },
+        { "name": "erp-engineering", "description": "Engineering department access to ERP" },
+        { "name": "erp-readonly", "description": "Read-only access to ERP" }
+      ],
+      "booking": [
+        { "name": "booking-admin", "description": "Full administrative access to the Booking system" },
+        { "name": "booking-manager", "description": "Front-desk/reservation management access to Booking" },
+        { "name": "booking-viewer", "description": "Read-only access to Booking" }
+      ],
+      "vehicle-sticker": [
+        { "name": "vehicle-sticker-admin", "description": "Full administrative access to Vehicle Sticker System" },
+        { "name": "vehicle-sticker-manager", "description": "Manage/approve access to Vehicle Sticker System" },
+        { "name": "vehicle-sticker-viewer", "description": "Read-only access to Vehicle Sticker System" }
+      ],
+      "car": [
+        { "name": "car-admin", "description": "Full administrative access to CAR" },
+        { "name": "car-manager", "description": "Manage/approve access to CAR" },
+        { "name": "car-viewer", "description": "Read-only access to CAR" }
+      ],
+      "ghp": [
+        { "name": "ghp-admin", "description": "Full administrative access to GHP" },
+        { "name": "ghp-viewer", "description": "Read-only access to GHP" }
+      ]
+    }
+  },
+
+  "groups": [
+    {
+      "name": "Employee",
+      "path": "/Employee",
+      "realmRoles": ["employee"],
+      "clientRoles": {}
+    },
+    {
+      "name": "IT-Admin",
+      "path": "/IT-Admin",
+      "realmRoles": ["it-admin"],
+      "clientRoles": {
+        "erp": ["erp-admin"],
+        "booking": ["booking-admin"],
+        "vehicle-sticker": ["vehicle-sticker-admin"],
+        "car": ["car-admin"],
+        "ghp": ["ghp-admin"]
+      }
+    },
+    {
+      "name": "Accounting",
+      "path": "/Accounting",
+      "clientRoles": {
+        "erp": ["erp-accounting"],
+        "booking": ["booking-viewer"]
+      }
+    },
+    {
+      "name": "Front-Desk",
+      "path": "/Front-Desk",
+      "clientRoles": {
+        "booking": ["booking-manager"]
+      }
+    },
+    {
+      "name": "Engineering",
+      "path": "/Engineering",
+      "clientRoles": {
+        "erp": ["erp-engineering"],
+        "vehicle-sticker": ["vehicle-sticker-viewer"]
+      }
+    },
+    {
+      "name": "HOA-Officers",
+      "path": "/HOA-Officers",
+      "clientRoles": {
+        "vehicle-sticker": ["vehicle-sticker-manager"],
+        "car": ["car-manager"]
+      }
+    }
+  ],
+
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"employee_code\",\"displayName\":\"Employee Code\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"group\":\"user-metadata\",\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "erp",
+      "name": "ERP",
+      "description": "TODO before go-live: replace redirectUris with the real ERP domain",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://REPLACE-WITH-ERP-DOMAIN/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "employee_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_code",
+            "claim.name": "employee_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "booking",
+      "name": "Booking System",
+      "description": "TODO before go-live: replace redirectUris with the real Booking domain",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://REPLACE-WITH-BOOKING-DOMAIN/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "employee_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_code",
+            "claim.name": "employee_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "vehicle-sticker",
+      "name": "Vehicle Sticker System",
+      "description": "TODO before go-live: replace redirectUris with the real Vehicle Sticker domain",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://REPLACE-WITH-VEHICLE-STICKER-DOMAIN/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "employee_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_code",
+            "claim.name": "employee_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "car",
+      "name": "CAR",
+      "description": "TODO before go-live: replace redirectUris with the real CAR domain",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://REPLACE-WITH-CAR-DOMAIN/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "employee_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_code",
+            "claim.name": "employee_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "ghp",
+      "name": "GHP",
+      "description": "TODO before go-live: replace redirectUris with the real GHP domain",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://REPLACE-WITH-GHP-DOMAIN/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "employee_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_code",
+            "claim.name": "employee_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

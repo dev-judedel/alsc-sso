@@ -1,0 +1,211 @@
+Implement (or upgrade) Keycloak/OIDC single sign-on for this application, following
+the architecture below. Treat every numbered section as a requirement unless it
+conflicts with something already in this codebase — then ask before deviating.
+
+## 0. Feature posture
+
+- SSO must be controlled by a single master boolean config/env flag
+  (e.g. SSO_ENABLED). When false: SSO routes/handlers refuse the request, the
+  "Sign in with company SSO" button is not rendered, and the app behaves exactly
+  as it did before SSO existed.
+- A second flag (ALLOW_LOCAL_LOGIN) controls dual-mode rollout: local
+  username/password login stays available alongside SSO until every user is
+  migrated. Login page shows SSO button, local form, or both depending on these
+  two flags.
+- Nothing about the realm layout (endpoint paths, signing keys) may be hardcoded.
+  Everything is discovered from the realm's OpenID Connect discovery document
+  and environment-driven config.
+
+## 1. Flow
+
+Standard OIDC Authorization Code flow (add PKCE if the client is public):
+
+1. GET /auth/sso/redirect — builds the authorization URL from the discovery
+   document, generates+stores a `state` (and `nonce` if you verify id_token),
+   redirects the browser to Keycloak.
+2. GET /auth/sso/callback — receives `code` + `state`:
+   - Reject if `state` doesn't match what was stored (CSRF/session-fixation
+     protection) — do NOT skip this even for "internal" IdPs.
+   - Reject if Keycloak sent `error` in the query string (user cancelled or was
+     denied — this is not a system failure, message it differently).
+   - Exchange `code` for tokens at the token endpoint.
+   - Verify the access token (see §2) before trusting any claim in it.
+   - Resolve/provision the local user (see §3).
+   - Establish the local session and log the user in through the app's normal
+     session mechanism — every existing auth-gated route/middleware must keep
+     working without knowing SSO was involved.
+
+## 2. Token verification (never trust an unverified token)
+
+Build these as separate, testable components:
+
+- **Discovery service**: fetches `{base_url}/realms/{realm}/.well-known/openid-configuration`,
+  caches it (TTL configurable), exposes issuer/jwks_uri/token_endpoint/
+  end_session_endpoint. Cache key must be scoped to base_url+realm so pointing
+  the app at a different realm can't serve stale endpoints/keys.
+- **JWKS-based signature verification**: fetch and cache the realm's JWKS
+  (TTL configurable), verify RS256 signature. If verification fails because the
+  token's `kid` isn't in the cached set, refetch JWKS once and retry before
+  rejecting — this is what a legitimate Keycloak key rotation looks like, and
+  without the retry every user gets locked out until the cache naturally expires.
+  Filter JWKS entries to `"use": "sig"` only.
+- **Issuer check**: `claims.iss` must equal the discovery document's `issuer`.
+- **Audience check**: accept if the client_id is in `claims.aud` (array or
+  scalar) OR equals `claims.azp` — Keycloak access tokens often carry a generic
+  audience and identify the real client via `azp`.
+- **Clock skew leeway**: configurable seconds (default ~60) tolerated on exp/nbf.
+- Every rejection path must log the technical reason (signature/issuer/
+  audience/decode/jwks) but return a generic user-safe message — never leak
+  token internals to the browser.
+
+## 3. User resolution / provisioning
+
+Matching order (most to least authoritative):
+1. Local `sso_subject_id` column already linked to `claims.sub` — this value
+   never changes, so it's checked first.
+2. A configured external-id claim (e.g. `employee_code`) matched against the
+   equivalent local unique column.
+3. (Optional, toggle-able) email fallback, to adopt pre-existing accounts that
+   predate SSO.
+
+Rules:
+- If a local record is found but its stored `sso_subject_id` belongs to a
+  *different* subject than the incoming token, refuse and escalate to an
+  "identity conflict" error — never silently rebind one person's account to
+  another identity.
+- Auto-provisioning (create a local row on first SSO login) is a separate
+  toggle from SSO itself. When off, an unmatched login is refused with a
+  "contact HR/IT to create your account" message, not a 500.
+- Whatever claim serves as the app's login identifier (employee_code, username,
+  whatever is NOT NULL + unique in your schema) MUST be supplied by the IdP as
+  a claim on the access token. If auto-provisioning is on and that claim is
+  absent, refuse with an explicit "your account is missing X, contact IT"
+  message that names the missing claim in the log (not to the user) — this is
+  almost always a missing Keycloak protocol mapper, not a code bug, so make
+  that diagnosable from logs alone.
+- Optional "sync profile" toggle: overwrite local name/email from token claims
+  on every login vs. leave local data untouched after first provision.
+
+## 4. Role/authorization mapping
+
+- Read roles from the token — either `realm_access.roles` (realm roles) or
+  `resource_access.{client_id}.roles` (client roles), configurable which.
+  Access as segments, not a dotted path, since a client_id may itself contain
+  dots.
+- Maintain a config map of {idp_role_name -> local_role_slug}. A user can hold
+  multiple IdP roles; if your local model only supports one role per user,
+  pick the mapped role with the highest precedence/level, matching whatever
+  precedence rule the rest of the app already uses.
+- A user with no mapped role should get a configurable default role, or be
+  denied outright if no default is set — denial-by-default is the safer
+  choice for a first implementation.
+- On token refresh, re-apply role mapping if the app wants a central role
+  change in Keycloak to take effect mid-session without a fresh login.
+
+## 5. Session + token refresh
+
+- Store access_token/refresh_token/id_token/expires_at as session state (not
+  on the user record — it's per-session, not per-user data). If tokens must
+  never reach the browser, use a server-side session store.
+- A middleware/hook on authenticated routes checks "does the access token
+  expire within N seconds (configurable skew)?" and if so, exchanges the
+  refresh_token transparently before the request proceeds.
+- If the refresh is rejected (refresh token expired, or the user was signed
+  out of the IdP centrally), tear down the local session too — this is what
+  makes a central logout propagate into the app.
+- Skip the refresh check on the logout and SSO routes themselves.
+- Implement RP-initiated logout: build the IdP's end-session URL with
+  `id_token_hint` (skips the "are you sure" prompt) and
+  `post_logout_redirect_uri`, and redirect there after destroying the local
+  session. Fetch the id_token_hint from session BEFORE invalidating it.
+  Never let a discovery/IdP failure block the local logout from completing.
+
+## 6. Config surface (env-driven, one value per line)
+
+    SSO_ENABLED=false                # keep false until the realm is ready
+    SSO_ALLOW_LOCAL_LOGIN=true
+    SSO_BASE_URL=
+    SSO_REALM=
+    SSO_CLIENT_ID=
+    SSO_CLIENT_SECRET=               # secret — server-side only, never commit
+    SSO_REDIRECT_URI=
+    SSO_LEEWAY=60
+    SSO_HTTP_TIMEOUT=10
+    SSO_DISCOVERY_CACHE_TTL=3600
+    SSO_JWKS_CACHE_TTL=3600
+    SSO_EXTERNAL_ID_CLAIM=employee_code
+    SSO_AUTO_PROVISION=true
+    SSO_MATCH_ON_EMAIL=true
+    SSO_ACTIVATE_PENDING=true
+    SSO_SYNC_PROFILE=true
+    SSO_ROLE_SOURCE=client           # client | realm
+    SSO_ROLE_CLIENT=                 # defaults to SSO_CLIENT_ID
+    SSO_DEFAULT_ROLE=                # blank = deny users with no mapped role
+    SSO_REFRESH_ENABLED=true
+    SSO_REFRESH_SKEW=30
+    SSO_REFRESH_RESYNC_ROLES=true
+
+## 7. Error handling contract
+
+Define one exception/error type for the whole SSO pipeline with named factory
+cases (unreachable, invalid_state, invalid_code, invalid_token:<detail>,
+no_roles_assigned, missing_claim:<name>, not_provisioned, identity_conflict,
+account_unavailable, session_expired, disabled). Each case carries a short
+machine-readable reason (logged) and a separate user-safe message (shown).
+Route handlers catch broadly (network errors, unexpected throwables) and map
+everything unexpected to the generic "sign-in service unavailable, try again
+or contact IT" message — never show a stack trace or raw HTTP error to the
+employee.
+
+## 8. Database changes
+
+Add to the users table: a unique nullable `sso_subject_id` (or `keycloak_id`)
+column, and whatever unique external-id column the app already uses as its
+login identifier (must exist already or be added). Index both.
+
+## 9. Realm/client setup checklist (hand this to whoever owns the IdP)
+
+- Create a confidential client in the realm, note client_id/secret.
+- Set valid redirect URI to exactly the callback URL.
+- Add a "User Attribute" protocol mapper on the client that writes the
+  external-id claim (e.g. employee_code) into the access token, if it isn't a
+  built-in claim.
+- Create client roles (or use realm roles) matching the role map in §4, and
+  assign them to test users.
+- Set the corresponding user attribute on at least one test user before
+  testing end-to-end.
+
+## Stack-specific notes
+
+If this is Laravel:
+- Use laravel/socialite + a socialiteproviders/keycloak-style provider package
+  for the redirect/code-exchange plumbing; still do your OWN token
+  verification (§2) rather than trusting Socialite's user object, since
+  Socialite does not verify the access token JWT for you.
+- Discovery/JWKS caching via the Cache facade; HTTP via the Http facade;
+  session state via the Session facade; refresh-check as route middleware
+  registered in the auth middleware group; register the provider's
+  SocialiteWasCalled listener in EventServiceProvider.
+- After adding the Composer packages, confirm `vendor/` actually contains them
+  (composer.lock listing a package is not the same as it being installed —
+  run `composer install` and check for a bare "Class ... not found" in the
+  logs, which is the single most common setup mistake here) and run
+  `php artisan config:clear` after any .env change since config is often cached.
+
+If this is native PHP (no framework):
+- Implement discovery/JWKS caching with a simple file or APCu cache keyed by
+  a hash of base_url+realm, respecting the TTLs above.
+- Use a JWT library (e.g. firebase/php-jwt) for RS256 verification — do not
+  hand-roll signature checking.
+- Store the `state` value and token set in `$_SESSION`, started with secure/
+  httponly/samesite cookie params.
+- Implement the refresh check as code that runs at the top of every
+  authenticated request (a bootstrap include, front controller hook, or
+  explicit call at the start of protected scripts) rather than framework
+  middleware.
+- Use cURL or a lightweight HTTP client for the discovery/token/JWKS/refresh
+  calls, with explicit timeouts matching SSO_HTTP_TIMEOUT.
+
+Before writing code, tell me: is this a fresh integration or an upgrade of an
+existing one? If existing, show me the current login flow and user table
+schema first so the plan reuses what's already there instead of duplicating it
