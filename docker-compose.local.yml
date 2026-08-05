@@ -1,0 +1,38 @@
+# LOCAL TESTING ONLY — uses start-dev (no TLS/hostname strictness required).
+# Do NOT use this file for the production VPS deployment — use docker-compose.yml there.
+#
+# Run with:
+#   docker compose -f docker-compose.local.yml up -d
+
+services:
+  keycloak-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: localdevpassword
+    volumes:
+      - keycloak_db_data_local:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: localdevpassword
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    depends_on:
+      - keycloak-db
+    volumes:
+      - ./realm-export:/opt/keycloak/data/import
+      - ./keycloak-theme/alsc-theme:/opt/keycloak/themes/alsc-theme
+
+volumes:
+  keycloak_db_data_local:

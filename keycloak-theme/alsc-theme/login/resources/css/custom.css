@@ -1,0 +1,140 @@
+/* ALSC — Apple-style minimal login theme for Keycloak
+   Built for the modern "keycloak.v2" (PatternFly 5) base theme. */
+
+:root {
+  --alsc-blue: #163a8f;
+  --alsc-red: #c8102e;
+  --alsc-text: #1d1d1f;
+  --alsc-text-secondary: #6e6e73;
+  --alsc-bg: #fbfbfd;
+  --alsc-border: #d2d2d7;
+}
+
+html, body {
+  background: var(--alsc-bg) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif !important;
+  color: var(--alsc-text);
+}
+
+/* Card container (PatternFly v5 login card) */
+.pf-v5-c-login__main {
+  background: #ffffff !important;
+  border: 1px solid var(--alsc-border) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.pf-v5-c-login__main-body {
+  padding: 16px 8px !important;
+}
+
+/* Hide the default header entirely — its layout position is unreliable
+   across Keycloak versions, so we pin our own logo instead (below). */
+#kc-header,
+.pf-v5-c-login__header {
+  display: none !important;
+}
+
+/* Force true centering — override the default theme's vertical centering
+   and two-column grid, which were pushing the card down and left. */
+.pf-v5-c-login,
+.pf-v5-c-login__container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+}
+.pf-v5-c-login__container {
+  padding-top: 96px !important;
+}
+
+/* Our logo, pinned reliably above the card regardless of default layout */
+body::before {
+  content: "";
+  display: block;
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150px;
+  height: 84px;
+  background-image: url(../img/alsc_logo.png);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  z-index: 10;
+}
+
+/* No extra top margin — spacing is now controlled by container padding-top above */
+.pf-v5-c-login__main {
+  margin-top: 0 !important;
+  max-width: 440px !important;
+  padding: 32px !important;
+}
+
+/* Title text */
+.pf-v5-c-title, #kc-page-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  text-align: center;
+  color: var(--alsc-text) !important;
+}
+
+/* Labels */
+.pf-v5-c-form__label-text {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--alsc-text-secondary) !important;
+}
+
+/* Inputs */
+.pf-v5-c-form-control {
+  border: 1px solid var(--alsc-border) !important;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  font-size: 15px !important;
+  box-shadow: none !important;
+}
+.pf-v5-c-form-control:focus {
+  border-color: var(--alsc-blue) !important;
+  box-shadow: none !important;
+}
+
+/* Primary button */
+.pf-v5-c-button.pf-m-primary {
+  background: var(--alsc-blue) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  width: 100%;
+}
+.pf-v5-c-button.pf-m-primary:hover {
+  opacity: 0.88;
+}
+
+/* Links */
+#kc-form-options a, .pf-v5-c-login__main-footer-band a {
+  color: var(--alsc-blue) !important;
+  text-decoration: none;
+  font-size: 13px;
+}
+#kc-form-options a:hover, .pf-v5-c-login__main-footer-band a:hover {
+  text-decoration: underline;
+}
+
+/* Alerts/errors */
+.pf-v5-c-alert.pf-m-danger, .pf-v5-c-alert.pf-m-inline.pf-m-danger {
+  border-left: 3px solid var(--alsc-red) !important;
+  background: #fdf2f2 !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+}
+
+/* Hide language switcher clutter if present */
+#kc-locale {
+  display: none !important;
+}
