@@ -32,8 +32,10 @@ services:
       KEYCLOAK_ADMIN: ${ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       JAVA_OPTS_APPEND: "-Xms256m -Xmx400m"
+    # TEMP: open to the public internet for setup/testing until Nginx+TLS is in
+    # place. Revert to "127.0.0.1:8080:8080" once that's done — see README.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     depends_on:
       - keycloak-db
     volumes:
