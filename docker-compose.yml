@@ -15,7 +15,10 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     restart: unless-stopped
-    command: start --optimized --hostname=${KC_HOSTNAME} --proxy-headers=xforwarded
+    # No --optimized: that flag assumes the image was already pre-built via
+    # `kc.sh build` (e.g. in a custom Dockerfile). We're running the stock image
+    # directly, so plain `start` lets Keycloak auto-build/augment safely on boot.
+    command: start --hostname=${KC_HOSTNAME} --proxy-headers=xforwarded
     # JAVA_OPTS_APPEND adds to Keycloak's computed defaults rather than replacing them.
     # Caps JVM heap so the process can't balloon past what a 1GB VPS can spare.
     mem_limit: 620m
