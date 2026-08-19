@@ -2,6 +2,9 @@ services:
   keycloak-db:
     image: postgres:15
     restart: unless-stopped
+    # Tuned down from Postgres defaults to fit a 1GB VPS (e.g. DO $6/mo droplet) alongside Keycloak.
+    command: postgres -c shared_buffers=64MB -c max_connections=30
+    mem_limit: 220m
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -13,6 +16,9 @@ services:
     image: quay.io/keycloak/keycloak:latest
     restart: unless-stopped
     command: start --optimized --hostname=${KC_HOSTNAME} --proxy-headers=xforwarded
+    # JAVA_OPTS_APPEND adds to Keycloak's computed defaults rather than replacing them.
+    # Caps JVM heap so the process can't balloon past what a 1GB VPS can spare.
+    mem_limit: 620m
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-db/keycloak
@@ -22,6 +28,7 @@ services:
       KC_HTTP_ENABLED: "true"
       KEYCLOAK_ADMIN: ${ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      JAVA_OPTS_APPEND: "-Xms256m -Xmx400m"
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
